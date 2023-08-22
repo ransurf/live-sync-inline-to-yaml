@@ -1,6 +1,6 @@
 # Inline Field Sync Plugin
 Syncs inline Dataview fields to YAML frontmatter properties of the note.
-
+[![Gif from Gyazo](https://i.gyazo.com/58526c6822850fde42edfbddba2b146e.gif)](https://gyazo.com/58526c6822850fde42edfbddba2b146e)
 I made this plugin because I want to keep my in-line fields since I find having them inside the note convenient, but I want to have the frontmatter YAML as the main source of truth because of the new properties plugin.
 
 ## Features
