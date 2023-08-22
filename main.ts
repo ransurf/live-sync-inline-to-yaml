@@ -1,85 +1,126 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
-
-// Remember to rename these classes and interfaces!
+import { App, Editor, EditorPosition, MarkdownView, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import moment from 'moment';
 
 interface MyPluginSettings {
-	mySetting: string;
+	syncedInlinePrefix: string;
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
+	syncedInlinePrefix: '\\_'
 }
 
 export default class MyPlugin extends Plugin {
 	settings: MyPluginSettings;
 
+	findFrontmatterEndLine(editor: Editor): number {
+		// check if there is a frontmatter section, which is either two lines of --- at the start of the file, or at least two lines of --- at the start
+		//start 
+		const firstLine = editor.getLine(0)
+		if (firstLine !== "---") {
+			return 0;
+		}
+		// get the second line and see if it is ---
+		const secondLine = editor.getLine(1)
+		if (secondLine === "---") {
+			return 1;
+		}
+		// if it is not ---, then check if there is at least two lines of --- , then return line number of 2nd instance
+		for (let i = 2; i <= editor.lastLine(); i++) {
+			if (editor.getLine(i) === "---") {
+				return i;
+			}
+		}
+		return 0;
+	}
+
+	isValidFieldName(fieldName: string): boolean {
+		// do not allow space, not sure what other restrictions there are oops
+		return !fieldName.includes(' ')
+	}
+
+	wrapInQuotationsIfString(value: string): string {
+		// console.log('value', value)
+		const parsedDate = moment(value);
+		if (value === 'true' || value === 'false' || !isNaN(Number(value)) || parsedDate.isValid()) {
+			// console.log('not wrapping true or number')
+			return value;
+		}
+		// if already wrapped then do not wrap
+		if (value.startsWith('"') && value.endsWith('"')) {
+			// console.log('not wrapping has quotations')
+			return value;
+		}
+		// console.log('wrapping' + value, `'${value}'`)
+		return `'${value}'`;
+	}
+
+	updateFrontmatterValue(editor: Editor, fieldName: string, newValue: string) {
+		const frontMatterEndLine = this.findFrontmatterEndLine(editor);
+		if (frontMatterEndLine === 0) {
+			const initialFirstLineContent = editor.getLine(0);
+			editor.setLine(0, `---\n${fieldName}: ${newValue}\n---\n${initialFirstLineContent}`);
+			return;
+		} else {
+			for (let i = 1; i <= frontMatterEndLine; i++) {
+				const [currentYamlField] = editor.getLine(i).split(':', 1);
+				if (currentYamlField === fieldName) {
+					// console.log()
+					// setLine
+					editor.setLine(i, `${fieldName}: ${newValue}`);
+					return;
+				}
+			}
+		}
+		const initialFirstLineContent = editor.getLine(1);
+		editor.setLine(0, `---\n${fieldName}: ${newValue}\n${initialFirstLineContent}`);
+	}
+
 	async onload() {
 		await this.loadSettings();
 
-		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
-		});
-		// Perform additional things with the ribbon
-		ribbonIconEl.addClass('my-plugin-ribbon-class');
-
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status Bar Text');
-
-		// This adds a simple command that can be triggered anywhere
-		this.addCommand({
-			id: 'open-sample-modal-simple',
-			name: 'Open sample modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
-			}
-		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'sample-editor-command',
-			name: 'Sample editor command',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				console.log(editor.getSelection());
-				editor.replaceSelection('Sample Editor Command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-sample-modal-complex',
-			name: 'Open sample modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
-
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
-				}
-			}
-		});
-
-		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new SampleSettingTab(this.app, this));
 
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			console.log('click', evt);
+		this.registerDomEvent(document, 'keydown', (evt: KeyboardEvent) => {
+			// allow for a slight delay before checking keystroke to allow for updated line
+			setTimeout(() => {
+				const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+				if (!activeView) {
+					return;
+				}
+				const editor: Editor = activeView.editor;
+				if (!editor.hasFocus()) {
+					return;
+				}
+				// console.log('editor', editor);
+				const cursor: EditorPosition = editor.getCursor();
+				const lineText: string = editor.getLine(cursor.line);
+				// console.log('lineText', lineText);
+				const frontmatterEndLine = this.findFrontmatterEndLine(editor);
+				// console.log('cursor line', cursor, cursor.line);
+				if (cursor.line > frontmatterEndLine) {
+					if (lineText?.includes('::')) {
+						const declarationIndex = lineText.indexOf('::');
+						if (cursor.ch >= declarationIndex) {
+							const [before, after] = lineText.split('::');
+							// console.log('before', before);
+							// console.log('after', after.substring(1));
+							if (this.isValidFieldName(before)) {
+								if (!before.startsWith(this.settings.syncedInlinePrefix)) {
+									editor.setLine(cursor.line, `${this.settings.syncedInlinePrefix}${before}:: ${after}`);
+								}
+								// console.log('validFieldName')
+								this.updateFrontmatterValue(editor,
+									before.startsWith(this.settings.syncedInlinePrefix) ? before.substring(2) : before,
+								this.wrapInQuotationsIfString(after.trim()));
+							}
+						}
+					}
+				}
+			}, 50)
 		});
 
 		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
 		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
-	}
-
-	onunload() {
-
 	}
 
 	async loadSettings() {
@@ -91,21 +132,6 @@ export default class MyPlugin extends Plugin {
 	}
 }
 
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
-
-	onOpen() {
-		const {contentEl} = this;
-		contentEl.setText('Woah!');
-	}
-
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
-	}
-}
 
 class SampleSettingTab extends PluginSettingTab {
 	plugin: MyPlugin;
@@ -121,13 +147,13 @@ class SampleSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
+			.setName('Prefix for synced inline fields')
+			.setDesc('When your inline field is synced to frontmatter, this prefix will be added to prevent duplicates in dataview queries')
 			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
+				.setPlaceholder('ex. \\_')
+				.setValue(this.plugin.settings.syncedInlinePrefix)
 				.onChange(async (value) => {
-					this.plugin.settings.mySetting = value;
+					this.plugin.settings.syncedInlinePrefix = value;
 					await this.plugin.saveSettings();
 				}));
 	}
