@@ -3,10 +3,12 @@ import moment from 'moment';
 
 interface MyPluginSettings {
 	syncedInlinePrefix: string;
+	undoKey: string;
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
-	syncedInlinePrefix: '\\_'
+	syncedInlinePrefix: '\\_',
+	undoKey: 'z'
 }
 
 export default class MyPlugin extends Plugin {
@@ -39,18 +41,18 @@ export default class MyPlugin extends Plugin {
 	}
 
 	wrapInQuotationsIfString(value: string): string {
-		// console.log('value', value)
+		console.log('value', value)
 		const parsedDate = moment(value);
 		if (value === 'true' || value === 'false' || !isNaN(Number(value)) || parsedDate.isValid()) {
-			// console.log('not wrapping true or number')
+			console.log('not wrapping true or number')
 			return value;
 		}
 		// if already wrapped then do not wrap
 		if (value.startsWith('"') && value.endsWith('"')) {
-			// console.log('not wrapping has quotations')
+			console.log('not wrapping has quotations')
 			return value;
 		}
-		// console.log('wrapping' + value, `'${value}'`)
+		console.log('wrapping' + value, `'${value}'`)
 		return `'${value}'`;
 	}
 
@@ -64,15 +66,14 @@ export default class MyPlugin extends Plugin {
 			for (let i = 1; i <= frontMatterEndLine; i++) {
 				const [currentYamlField] = editor.getLine(i).split(':', 1);
 				if (currentYamlField === fieldName) {
-					// console.log()
 					// setLine
 					editor.setLine(i, `${fieldName}: ${newValue}`);
 					return;
 				}
 			}
 		}
-		const initialFirstLineContent = editor.getLine(1);
-		editor.setLine(0, `---\n${fieldName}: ${newValue}\n${initialFirstLineContent}`);
+		// add to start of 
+		editor.setLine(0, `---\n${fieldName}: ${newValue}`);
 	}
 
 	async onload() {
@@ -82,33 +83,38 @@ export default class MyPlugin extends Plugin {
 
 		this.registerDomEvent(document, 'keydown', (evt: KeyboardEvent) => {
 			// allow for a slight delay before checking keystroke to allow for updated line
+			const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+			if (!activeView) {
+				return;
+			}
+
+			if (evt.key.includes('Shift') || evt.key.includes('Control') || evt.ctrlKey && evt.key === this.settings.undoKey) {
+				return;
+			}
+
 			setTimeout(() => {
-				const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (!activeView) {
-					return;
-				}
+				// undo will cause weird loop
+				console.log('evt', evt)
+
 				const editor: Editor = activeView.editor;
-				if (!editor.hasFocus()) {
-					return;
-				}
-				// console.log('editor', editor);
+				console.log('editor', editor);
 				const cursor: EditorPosition = editor.getCursor();
 				const lineText: string = editor.getLine(cursor.line);
-				// console.log('lineText', lineText);
+				console.log('lineText', lineText);
 				const frontmatterEndLine = this.findFrontmatterEndLine(editor);
-				// console.log('cursor line', cursor, cursor.line);
-				if (cursor.line > frontmatterEndLine) {
+				console.log('cursor line', cursor, cursor.line);
+				if (cursor.line >= frontmatterEndLine) {
 					if (lineText?.includes('::')) {
 						const declarationIndex = lineText.indexOf('::');
 						if (cursor.ch >= declarationIndex) {
 							const [before, after] = lineText.split('::');
-							// console.log('before', before);
-							// console.log('after', after.substring(1));
+							console.log('before', before);
+							console.log('after', after.substring(1));
 							if (this.isValidFieldName(before)) {
 								if (!before.startsWith(this.settings.syncedInlinePrefix)) {
 									editor.setLine(cursor.line, `${this.settings.syncedInlinePrefix}${before}:: ${after}`);
 								}
-								// console.log('validFieldName')
+								console.log('validFieldName')
 								this.updateFrontmatterValue(editor,
 									before.startsWith(this.settings.syncedInlinePrefix) ? before.substring(2) : before,
 								this.wrapInQuotationsIfString(after.trim()));
@@ -121,6 +127,9 @@ export default class MyPlugin extends Plugin {
 
 		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
 		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
+	}
+
+	async onunload() {
 	}
 
 	async loadSettings() {
@@ -154,6 +163,16 @@ class SampleSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.syncedInlinePrefix)
 				.onChange(async (value) => {
 					this.plugin.settings.syncedInlinePrefix = value;
+					await this.plugin.saveSettings();
+				}));
+		new Setting(containerEl)
+			.setName('Change undo key')
+			.setDesc('Will prevent sync on undo action (ctrl + your key) since otherwise it will freeze')
+			.addText(text => text
+				.setPlaceholder('ex. z')
+				.setValue(this.plugin.settings.undoKey)
+				.onChange(async (value) => {
+					this.plugin.settings.undoKey = value;
 					await this.plugin.saveSettings();
 				}));
 	}
