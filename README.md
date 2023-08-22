@@ -18,4 +18,13 @@ Thus, I recommend only changing it at the very beginning of the plugin installat
 Not tested on mobile.
 ### Undo Key
 Will prevent sync on undo action (ctrl + your key) since otherwise, it will freeze.
-Default is z
+Default is z.
+## Roadmap
+*Updates are very low priority for me, so feel free to navigate my spaghetti code and implement some yourself if it suits your use case!*
+- Global blacklist certain fields from being synced
+- Add frontmatter that will disable it sync from happening
+- Add ability to disable sync for a field by adding comment above like
+```
+%%inline-sync-disable%%
+field:: is not synced
+```
