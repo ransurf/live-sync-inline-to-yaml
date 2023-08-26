@@ -1,18 +1,17 @@
-import { App, Editor, EditorPosition, MarkdownView, Plugin, PluginSettingTab, Setting } from 'obsidian';
-import moment from 'moment';
+import { App, Editor, EditorPosition, MarkdownView, moment, Plugin, PluginSettingTab, Setting } from 'obsidian';
 
-interface MyPluginSettings {
+interface InlineFMSyncSettings {
 	syncedInlinePrefix: string;
 	undoKey: string;
 }
 
-const DEFAULT_SETTINGS: MyPluginSettings = {
+const DEFAULT_SETTINGS: InlineFMSyncSettings = {
 	syncedInlinePrefix: '\\_',
 	undoKey: 'z'
 }
 
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+export default class InlineFMSync extends Plugin {
+	settings: InlineFMSyncSettings;
 
 	findFrontmatterEndLine(editor: Editor): number {
 		// check if there is a frontmatter section, which is either two lines of --- at the start of the file, or at least two lines of --- at the start
@@ -41,18 +40,18 @@ export default class MyPlugin extends Plugin {
 	}
 
 	wrapInQuotationsIfString(value: string): string {
-		console.log('value', value)
+		// console.log('value', value)
 		const parsedDate = moment(value);
 		if (value === 'true' || value === 'false' || !isNaN(Number(value)) || parsedDate.isValid()) {
-			console.log('not wrapping true or number')
+			// console.log('not wrapping true or number')
 			return value;
 		}
 		// if already wrapped then do not wrap
 		if (value.startsWith('"') && value.endsWith('"')) {
-			console.log('not wrapping has quotations')
+			// console.log('not wrapping has quotations')
 			return value;
 		}
-		console.log('wrapping' + value, `'${value}'`)
+		// console.log('wrapping' + value, `'${value}'`)
 		return `'${value}'`;
 	}
 
@@ -79,7 +78,12 @@ export default class MyPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
-		this.addSettingTab(new SampleSettingTab(this.app, this));
+		this.addSettingTab(new InlineFMSyncSettingTab(this.app, this));
+
+		// this.app.workspace.on('editor-change', (view: any, editor: any) => {
+		// 	console.log('editor-change', view, editor);
+		// 	console.log('last event', this.app.lastEvent)
+		// });
 
 		this.registerDomEvent(document, 'keydown', (evt: KeyboardEvent) => {
 			// allow for a slight delay before checking keystroke to allow for updated line
@@ -94,27 +98,28 @@ export default class MyPlugin extends Plugin {
 
 			setTimeout(() => {
 				// undo will cause weird loop
-				console.log('evt', evt)
+				// console.log('evt', evt)
 
 				const editor: Editor = activeView.editor;
-				console.log('editor', editor);
+				// console.log('editor', editor);
+				
 				const cursor: EditorPosition = editor.getCursor();
 				const lineText: string = editor.getLine(cursor.line);
-				console.log('lineText', lineText);
+				// console.log('lineText', lineText);
 				const frontmatterEndLine = this.findFrontmatterEndLine(editor);
-				console.log('cursor line', cursor, cursor.line);
+				// console.log('cursor line', cursor, cursor.line);
 				if (cursor.line >= frontmatterEndLine) {
 					if (lineText?.includes('::')) {
 						const declarationIndex = lineText.indexOf('::');
 						if (cursor.ch >= declarationIndex) {
 							const [before, after] = lineText.split('::');
-							console.log('before', before);
-							console.log('after', after.substring(1));
+							// console.log('before', before);
+							// console.log('after', after.substring(1));
 							if (this.isValidFieldName(before)) {
 								if (!before.startsWith(this.settings.syncedInlinePrefix)) {
 									editor.setLine(cursor.line, `${this.settings.syncedInlinePrefix}${before}:: ${after}`);
 								}
-								console.log('validFieldName')
+								// console.log('validFieldName')
 								this.updateFrontmatterValue(editor,
 									before.startsWith(this.settings.syncedInlinePrefix) ? before.substring(2) : before,
 								this.wrapInQuotationsIfString(after.trim()));
@@ -124,9 +129,6 @@ export default class MyPlugin extends Plugin {
 				}
 			}, 50)
 		});
-
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
 	}
 
 	async onunload() {
@@ -142,10 +144,10 @@ export default class MyPlugin extends Plugin {
 }
 
 
-class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
+class InlineFMSyncSettingTab extends PluginSettingTab {
+	plugin: InlineFMSync;
 
-	constructor(app: App, plugin: MyPlugin) {
+	constructor(app: App, plugin: InlineFMSync) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
