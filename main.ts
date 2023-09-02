@@ -182,12 +182,12 @@ class InlineFMSyncSettingTab extends PluginSettingTab {
 		}));
 		new Setting(containerEl)
 		.setName('Ignored fields')
-		.setDesc('Separate each field name with a comma')
+		.setDesc('Separate each field name with a comma (no spaces)')
 		.addTextArea(text => text
-			.setPlaceholder('ex. Status\nTags')
-			.setValue(this.plugin.settings.undoKey)
+			.setPlaceholder('ex. Status,Tags')
+			.setValue(this.plugin.settings.ignoredFields.join(','))
 			.onChange(async (value) => {
-				this.plugin.settings.ignoredFields = value.split(',');
+				this.plugin.settings.ignoredFields = value.trim().split(',');
 				await this.plugin.saveSettings();
 		}));
 	}
