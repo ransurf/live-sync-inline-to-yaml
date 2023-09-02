@@ -187,7 +187,6 @@ class InlineFMSyncSettingTab extends PluginSettingTab {
 			.setPlaceholder('ex. Status\nTags')
 			.setValue(this.plugin.settings.undoKey)
 			.onChange(async (value) => {
-				console.log('value', value)
 				this.plugin.settings.ignoredFields = value.split(',');
 				await this.plugin.saveSettings();
 		}));
