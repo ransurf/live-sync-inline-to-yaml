@@ -3,11 +3,13 @@ import { App, Editor, EditorPosition, MarkdownView, moment, Plugin, PluginSettin
 interface InlineFMSyncSettings {
 	syncedInlinePrefix: string;
 	undoKey: string;
+	ignoredFields: string[];
 }
 
 const DEFAULT_SETTINGS: InlineFMSyncSettings = {
 	syncedInlinePrefix: '\\_',
-	undoKey: 'z'
+	undoKey: 'z',
+	ignoredFields: [],
 }
 
 export default class InlineFMSync extends Plugin {
@@ -36,7 +38,8 @@ export default class InlineFMSync extends Plugin {
 
 	isValidFieldName(fieldName: string): boolean {
 		// do not allow space, not sure what other restrictions there are oops
-		return !fieldName.includes(' ')
+		// TODO: allow for bullet point or within text using [] syntax
+		return !fieldName.includes(' ') && !this.settings.ignoredFields.includes(fieldName);
 	}
 
 	wrapInQuotationsIfString(value: string): string {
@@ -176,6 +179,17 @@ class InlineFMSyncSettingTab extends PluginSettingTab {
 				.onChange(async (value) => {
 					this.plugin.settings.undoKey = value;
 					await this.plugin.saveSettings();
-				}));
+		}));
+		new Setting(containerEl)
+		.setName('Ignored fields')
+		.setDesc('Separate each field name with a comma')
+		.addTextArea(text => text
+			.setPlaceholder('ex. Status\nTags')
+			.setValue(this.plugin.settings.undoKey)
+			.onChange(async (value) => {
+				console.log('value', value)
+				this.plugin.settings.ignoredFields = value.split(',');
+				await this.plugin.saveSettings();
+		}));
 	}
 }
