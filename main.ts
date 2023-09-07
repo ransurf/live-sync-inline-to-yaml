@@ -55,7 +55,7 @@ export default class InlineFMSync extends Plugin {
 			return value;
 		}
 		// console.log('wrapping' + value, `'${value}'`)
-		return `'${value}'`;
+		return `'${value.replaceAll("'", "''")}'`;
 	}
 
 	updateFrontmatterValue(editor: Editor, fieldName: string, newValue: string) {
